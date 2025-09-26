@@ -1,0 +1,13 @@
+*.o
+*.out
+*.exe
+*.dSYM/
+
+build/
+CMakeFiles/
+
+.vscode/
+.idea/
+*.swp
+
+.DS_Store

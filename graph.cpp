@@ -4,38 +4,38 @@
 #include <string>
 
 struct Node {
-    sf::Vector2f pos;
+    sf::Vector2f position;
     float radius = 0.f;
-    bool growing = true;
+    bool IsGrowing = true;
     sf::CircleShape shape;
     sf::Text label;
 
-    Node(const sf::Vector2f& p, int index, const sf::Font& font) : pos(p) {
+    Node(const sf::Vector2f& p, int index, const sf::Font& font) : position(p) {
         shape.setRadius(radius);
         shape.setFillColor(sf::Color(100, 150, 250));
         shape.setOrigin(radius, radius);
-        shape.setPosition(pos);
+        shape.setPosition(position);
 
         label.setFont(font);
         label.setString(std::to_string(index));
         label.setCharacterSize(14);
         label.setFillColor(sf::Color::White);
-        label.setPosition(pos);
+        label.setPosition(position);
     }
 
     void update() {
-        if (growing && radius < 15.f) {
+        if (IsGrowing && radius < 15.f) {
             radius += 0.5f;
             shape.setRadius(radius);
             shape.setOrigin(radius, radius);
         } else {
-            growing = false;
+            IsGrowing = false;
         }
-        shape.setPosition(pos);
+        shape.setPosition(position);
 
         sf::FloatRect textBounds = label.getLocalBounds();
         label.setOrigin(textBounds.width / 2, textBounds.height / 2);
-        label.setPosition(pos);
+        label.setPosition(position);
     }
 
     void draw(sf::RenderWindow& window) {
@@ -60,40 +60,50 @@ public:
     float repelStrength = 0.1f;
     float springStrength = 0.02f;
 
-    void addNode(const sf::Vector2f& pos, const sf::Font& font) {
-        nodes.emplace_back(pos, nodes.size(), font);
+    void addNode(const sf::Vector2f& position, const sf::Font& font) {
+        nodes.emplace_back(position, nodes.size(), font);
     }
 
     void addEdge(int firstNode, int secondNode) {
-        float dx = nodes[secondNode].pos.x - nodes[firstNode].pos.x;
-        float dy = nodes[secondNode].pos.y - nodes[firstNode].pos.y;
-        float dist = std::sqrt(dx*dx + dy*dy);
+        if (hasEdge(firstNode, secondNode)) return;
+        auto dx = nodes[secondNode].position.x - nodes[firstNode].position.x;
+        auto dy = nodes[secondNode].position.y - nodes[firstNode].position.y;
+        auto dist = std::sqrt(dx*dx + dy*dy);
         edges.emplace_back(firstNode, secondNode, dist);
     }
 
-    void updatePhysics(int draggedNode) {
+    bool hasEdge(int firstNode, int secondNode) {
+        for (auto& edge : edges) {
+            if ((edge.firstNode == firstNode && edge.secondNode == secondNode) || (edge.firstNode == secondNode && edge.secondNode == firstNode)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void updatePhysics(int draggedNodeId) {
         for (size_t i = 0; i < nodes.size(); i++) {
             for (size_t j = i + 1; j < nodes.size(); j++) {
-                sf::Vector2f delta = nodes[j].pos - nodes[i].pos;
-                float dist = std::sqrt(delta.x * delta.x + delta.y * delta.y);
-                float minDist = nodes[i].radius + nodes[j].radius + 2;
+                sf::Vector2f delta = nodes[j].position - nodes[i].position;
+                auto dist = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+                auto minDist = nodes[i].radius + nodes[j].radius + 2;
 
                 if (dist < minDist && dist > 0.01f) {
                     sf::Vector2f push = (delta / dist) * (minDist - dist) * repelStrength;
-                    if ((int)i != draggedNode) nodes[i].pos -= push;
-                    if ((int)j != draggedNode) nodes[j].pos += push;
+                    if ((int)i != draggedNodeId) nodes[i].position -= push;
+                    if ((int)j != draggedNodeId) nodes[j].position += push;
                 }
             }
         }
 
         for (auto& edge : edges) {
-            sf::Vector2f delta = nodes[edge.secondNode].pos - nodes[edge.firstNode].pos;
+            sf::Vector2f delta = nodes[edge.secondNode].position - nodes[edge.firstNode].position;
             float dist = std::sqrt(delta.x * delta.x + delta.y * delta.y);
             if (dist > 0.01f) {
                 sf::Vector2f dir = delta / dist;
                 float force = (dist - edge.weight) * springStrength;
-                if (edge.firstNode != draggedNode) nodes[edge.firstNode].pos += dir * force;
-                if (edge.secondNode != draggedNode) nodes[edge.secondNode].pos -= dir * force;
+                if (edge.firstNode != draggedNodeId) nodes[edge.firstNode].position += dir * force;
+                if (edge.secondNode != draggedNodeId) nodes[edge.secondNode].position -= dir * force;
             }
         }
     }
@@ -108,13 +118,13 @@ public:
             auto color = edge.isSelected ? sf::Color::Red : sf::Color::White;
 
             sf::Vertex line[] = {
-                sf::Vertex(nodes[edge.firstNode].pos, color),
-                sf::Vertex(nodes[edge.secondNode].pos, color)
+                sf::Vertex(nodes[edge.firstNode].position, color),
+                sf::Vertex(nodes[edge.secondNode].position, color)
             };
             window.draw(line, 2, sf::Lines);
 
             // подпись веса
-            auto mid = (nodes[edge.firstNode].pos + nodes[edge.secondNode].pos) / 2.f;
+            auto mid = (nodes[edge.firstNode].position + nodes[edge.secondNode].position) / 2.f;
             sf::Text weightText;
             weightText.setFont(font);
             if (i == editingEdge && !weightInput.empty()) {
@@ -142,28 +152,28 @@ public:
 bool isPointNearLine(sf::Vector2f p, sf::Vector2f firstNode, sf::Vector2f secondNode, float tolerance = 10.f) {
     auto ab = secondNode - firstNode;
     auto ap = p - firstNode;
-    float abLen2 = ab.x*ab.x + ab.y*ab.y;
+    auto abLen2 = ab.x*ab.x + ab.y*ab.y;
     if (abLen2 < 1e-6f) return false;
-    float proj = (ap.x*ab.x + ap.y*ab.y) / abLen2;
+    auto proj = (ap.x*ab.x + ap.y*ab.y) / abLen2;
     proj = std::max(0.f, std::min(1.f, proj));
     auto closest = firstNode + proj * ab;
-    float dx = p.x - closest.x, dy = p.y - closest.y;
+    auto dx = p.x - closest.x, dy = p.y - closest.y;
     return std::sqrt(dx*dx + dy*dy) < tolerance;
 }
 
 int main() {
     sf::ContextSettings settings;
     settings.antialiasingLevel = 8;
-    auto window(sf::VideoMode(3840, 2160), "Graph", sf::Style::Default, settings);
+    sf::RenderWindow window(sf::VideoMode(3840, 2160), "Graph", sf::Style::Default, settings);
     window.setFramerateLimit(90);
 
     sf::Font font;
     if (!font.loadFromFile("/System/Library/Fonts/Supplemental/Arial.ttf")) return -1;
 
     Graph graph;
-    int draggedNode = -1;
-    int selectedNode = -1;
-    int selectedEdge = -1;
+    auto draggedNodeId = -1;
+    auto selectedNodeId = -1;
+    auto selectedEdgeId = -1;
     bool typingWeight = false;
     std::string weightInput;
 
@@ -188,9 +198,9 @@ int main() {
                 // кнопка "Clear"
                 if (clearBtn.getGlobalBounds().contains(click)) {
                     graph.clear();
-                    draggedNode = -1;
-                    selectedNode = -1;
-                    selectedEdge = -1;
+                    draggedNodeId = -1;
+                    selectedNodeId = -1;
+                    selectedEdgeId = -1;
                     typingWeight = false;
                     weightInput.clear();
                     continue;
@@ -200,31 +210,31 @@ int main() {
 
                 // клик по вершине?
                 for (int i = 0; i < (int)graph.nodes.size(); i++) {
-                    float dx = click.x - graph.nodes[i].pos.x;
-                    float dy = click.y - graph.nodes[i].pos.y;
-                    float dist = std::sqrt(dx*dx + dy*dy);
+                    auto dx = click.x - graph.nodes[i].position.x;
+                    auto dy = click.y - graph.nodes[i].position.y;
+                    auto dist = std::sqrt(dx*dx + dy*dy);
                     if (dist <= graph.nodes[i].radius) {
                         typingWeight = false;
-                        selectedEdge = -1;
+                        selectedEdgeId = -1;
                         weightInput.clear();
 
                         if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
-                            if (selectedNode == -1) {
-                                selectedNode = i;
+                            if (selectedNodeId == -1) {
+                                selectedNodeId = i;
                                 graph.nodes[i].shape.setFillColor(sf::Color::Yellow);
                                 for (auto& edge : graph.edges) edge.isSelected = (edge.firstNode == i || edge.secondNode == i);
                             } else {
-                                graph.addEdge(selectedNode, i);
-                                graph.nodes[selectedNode].shape.setFillColor(sf::Color(100, 150, 250));
-                                selectedNode = -1;
+                                graph.addEdge(selectedNodeId, i);
+                                graph.nodes[selectedNodeId].shape.setFillColor(sf::Color(100, 150, 250));
+                                selectedNodeId = -1;
                                 for (auto& edge : graph.edges) edge.isSelected = false;
                             }
                         } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) {
                             float angle = (float)rand() / RAND_MAX * 2 * M_PI;
-                            graph.addNode(graph.nodes[i].pos + sf::Vector2f(60 * cos(angle), 60 * sin(angle)), font);
+                            graph.addNode(graph.nodes[i].position + sf::Vector2f(60 * cos(angle), 60 * sin(angle)), font);
                             graph.addEdge(i, (int)graph.nodes.size() - 1);
                         } else {
-                            draggedNode = i;
+                            draggedNodeId = i;
                             for (auto& edge : graph.edges) edge.isSelected = (edge.firstNode == i || edge.secondNode == i);
                         }
 
@@ -237,12 +247,12 @@ int main() {
                     bool edgeClicked = false;
                     for (int i = 0; i < (int)graph.edges.size(); i++) {
                         auto& edge = graph.edges[i];
-                        if (isPointNearLine(click, graph.nodes[edge.firstNode].pos, graph.nodes[edge.secondNode].pos)) {
+                        if (isPointNearLine(click, graph.nodes[edge.firstNode].position, graph.nodes[edge.secondNode].position)) {
                             for (auto& ee : graph.edges) ee.isSelected = false;
-                            selectedNode = -1;
-                            draggedNode = -1;
+                            selectedNodeId = -1;
+                            draggedNodeId = -1;
 
-                            selectedEdge = i;
+                            selectedEdgeId = i;
                             edge.isSelected = true;
                             typingWeight = true;
                             weightInput.clear();
@@ -252,7 +262,7 @@ int main() {
                     }
                     if (!edgeClicked) {
                         typingWeight = false;
-                        selectedEdge = -1;
+                        selectedEdgeId = -1;
                         weightInput.clear();
                         graph.addNode(click, font);
                         for (auto& edge : graph.edges) edge.isSelected = false;
@@ -261,10 +271,10 @@ int main() {
             }
 
             if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
-                draggedNode = -1;
+                draggedNodeId = -1;
             }
 
-            if (typingWeight && selectedEdge != -1 && event.type == sf::Event::TextEntered) {
+            if (typingWeight && selectedEdgeId != -1 && event.type == sf::Event::TextEntered) {
                 const auto ch = static_cast<char>(event.text.unicode);
                 if (ch >= '0' && ch <= '9') {
                     weightInput += ch;
@@ -273,32 +283,32 @@ int main() {
                 }
             }
 
-            if (typingWeight && selectedEdge != -1 && event.type == sf::Event::KeyPressed) {
+            if (typingWeight && selectedEdgeId != -1 && event.type == sf::Event::KeyPressed) {
                 if (event.key.code == sf::Keyboard::Enter || event.key.code == sf::Keyboard::Return) {
                     if (!weightInput.empty()) {
-                        graph.edges[selectedEdge].weight = std::stof(weightInput);
+                        graph.edges[selectedEdgeId].weight = std::stof(weightInput);
                     }
                     typingWeight = false;
-                    graph.edges[selectedEdge].isSelected = false; selectedEdge = -1;
+                    graph.edges[selectedEdgeId].isSelected = false; selectedEdgeId = -1;
                 } else if (event.key.code == sf::Keyboard::Escape) {
                     typingWeight = false;
                     weightInput.clear();
-                    graph.edges[selectedEdge].isSelected = false; selectedEdge = -1;
+                    graph.edges[selectedEdgeId].isSelected = false; selectedEdgeId = -1;
                 } else if (event.key.code == sf::Keyboard::BackSpace) {
                     if (!weightInput.empty()) weightInput.pop_back();
                 }
             }
         }
 
-        if (draggedNode != -1) {
-            graph.nodes[draggedNode].pos = (sf::Vector2f)sf::Mouse::getPosition(window);
+        if (draggedNodeId != -1) {
+            graph.nodes[draggedNodeId].position = (sf::Vector2f)sf::Mouse::getPosition(window);
         }
 
-        graph.updatePhysics(draggedNode);
+        graph.updatePhysics(draggedNodeId);
         graph.updateNodes();
 
         window.clear(sf::Color::Black);
-        graph.draw(window, font, typingWeight ? selectedEdge : -1, weightInput);
+        graph.draw(window, font, typingWeight ? selectedEdgeId : -1, weightInput);
         window.draw(clearBtn);
         window.draw(btnText);
         window.display();
