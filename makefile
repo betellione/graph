@@ -35,3 +35,6 @@ format:
 
 tidy:
 	clang-tidy $(SRCS) -- -Iinclude -I$(SFML_INCLUDE) -std=c++17
+
+tidy-fix:
+	clang-tidy $(SRCS) -- -Iinclude -I$(SFML_INCLUDE) -std=c++17 -fix -fix-errors
